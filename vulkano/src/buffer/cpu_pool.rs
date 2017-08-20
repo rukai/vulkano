@@ -288,12 +288,14 @@ impl<T, A> CpuBufferPool<T, A>
     fn reset_buf(&self, cur_buf_mutex: &mut MutexGuard<Option<Arc<ActualBuffer<A>>>>,
                  capacity: usize)
                  -> Result<(), DeviceMemoryAllocError> {
+        println!("capacity: {}", capacity);
         unsafe {
             let (buffer, mem_reqs) = {
                 let size_bytes = match mem::size_of::<T>().checked_mul(capacity) {
                     Some(s) => s,
                     None => return Err(DeviceMemoryAllocError::OomError(OomError::OutOfDeviceMemory)),
                 };
+                println!("size_bytes: {}", size_bytes);
 
                 match UnsafeBuffer::new(self.device.clone(),
                                           size_bytes,
@@ -345,15 +347,22 @@ impl<T, A> CpuBufferPool<T, A>
         where I: ExactSizeIterator<Item = T>
     {
         // Grab the current buffer. Return `Err` if the pool wasn't "initialized" yet.
+        println!("try_next_impl1");
         let current_buffer = match cur_buf_mutex.clone() {
             Some(b) => b,
             None => return Err(data),
         };
+        println!("try_next_impl2");
 
         let mut chunks_in_use = current_buffer.chunks_in_use.lock().unwrap();
+        for c in chunks_in_use.iter() {
+            println!("c.index: {}", c.index);
+            println!("c.len: {}", c.len);
+        }
 
         // Number of elements requested by the user.
         let requested_len = data.len();
+        println!("requested_len: {}", requested_len);
 
         // Find a suitable offset and len, or returns if none available.
         let (index, occupied_len, align_offset) = {
@@ -365,6 +374,7 @@ impl<T, A> CpuBufferPool<T, A>
                 let idx = current_buffer
                     .next_index
                     .load(Ordering::SeqCst);
+                println!("idx: {}", idx);
 
                 // Find the required alignment in bytes.
                 let align_bytes = cmp::max(
@@ -377,18 +387,27 @@ impl<T, A> CpuBufferPool<T, A>
                             .min_storage_buffer_offset_alignment() as usize
                     } else { 1 },
                 );
+                println!("min_storage_buffer_offset_alignment: {}", self.device().physical_device().limits().min_storage_buffer_offset_alignment() as usize);
+                println!("align_bytes: {}", align_bytes);
 
                 let tentative_align_offset = (align_bytes - ((idx * mem::size_of::<T>()) % align_bytes)) % align_bytes;
+                println!("mem::size_of::<T>(): {}", mem::size_of::<T>());
+                println!("tentative_align_offset: {}", tentative_align_offset);
                 let additional_len = if tentative_align_offset == 0 {
                     0
                 } else {
                     1 + (tentative_align_offset - 1) / mem::size_of::<T>()
                 };
+                println!("additional_len: {}", additional_len);
 
                 (idx, requested_len + additional_len, tentative_align_offset)
             };
 
             // Find out whether any chunk in use overlaps this range.
+            println!("tentative_index: {}", tentative_index);
+            println!("tentative_len: {}", tentative_len);
+            println!("current_buffer.capacity: {}", current_buffer.capacity);
+
             if tentative_index + tentative_len <= current_buffer.capacity &&
                 !chunks_in_use.iter().any(|c| (c.index >= tentative_index && c.index < tentative_index + tentative_len) ||
                     (c.index <= tentative_index && c.index + c.len > tentative_index))
@@ -406,6 +425,7 @@ impl<T, A> CpuBufferPool<T, A>
                 }
             }
         };
+        println!("try_next_impl3");
 
         // Write `data` in the memory.
         unsafe {
