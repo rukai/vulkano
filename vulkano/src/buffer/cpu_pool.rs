@@ -246,14 +246,15 @@ impl<T, A> CpuBufferPool<T, A>
         where I: IntoIterator<Item = T>,
               I::IntoIter: ExactSizeIterator
     {
+        println!("chunk1");
         let data = data.into_iter();
-
         let mut mutex = self.current_buffer.lock().unwrap();
 
         let data = match self.try_next_impl(&mut mutex, data) {
             Ok(n) => return n,
             Err(d) => d,
         };
+        println!("chunk2");
 
         // TODO: choose the capacity better?
         let next_capacity = cmp::max(data.len(), 1) * match *mutex {
@@ -289,12 +290,14 @@ impl<T, A> CpuBufferPool<T, A>
     fn reset_buf(&self, cur_buf_mutex: &mut MutexGuard<Option<Arc<ActualBuffer<A>>>>,
                  capacity: usize)
                  -> Result<(), DeviceMemoryAllocError> {
+        println!("capacity: {}", capacity);
         unsafe {
             let (buffer, mem_reqs) = {
                 let size_bytes = match mem::size_of::<T>().checked_mul(capacity) {
                     Some(s) => s,
                     None => return Err(DeviceMemoryAllocError::OomError(OomError::OutOfDeviceMemory)),
                 };
+                println!("size_bytes: {}", size_bytes);
 
                 match UnsafeBuffer::new(self.device.clone(),
                                           size_bytes,
@@ -356,6 +359,7 @@ impl<T, A> CpuBufferPool<T, A>
 
         // Number of elements requested by the user.
         let requested_len = data.len();
+        println!("requested_len: {}", requested_len);
 
         // We special case when 0 elements are requested. Polluting the list of allocated chunks
         // with chunks of length 0 means that we will have troubles deallocating.
@@ -394,6 +398,7 @@ impl<T, A> CpuBufferPool<T, A>
                             .min_storage_buffer_offset_alignment() as usize
                     } else { 1 },
                 );
+                println!("min_storage_buffer_offset_alignment: {}", self.device().physical_device().limits().min_storage_buffer_offset_alignment());
 
                 let tentative_align_offset = (align_bytes - ((idx * mem::size_of::<T>()) % align_bytes)) % align_bytes;
                 let additional_len = if tentative_align_offset == 0 {
