@@ -8,8 +8,8 @@ license = "MIT/Apache-2.0"
 categories = ["rendering::graphics-api"]
 
 [dependencies]
-vulkano = { version = "0.9.0", path = "../vulkano" }
-winit = "0.11.0"
+vulkano = { git = "https://github.com/vulkano-rs/vulkano" }
+winit = { git = "https://github.com/tomaka/winit" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 metal-rs = "0.6"
