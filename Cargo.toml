@@ -1,4 +1,5 @@
 [workspace]
+foo
 members = [
     "examples",
     "glsl-to-spirv",
